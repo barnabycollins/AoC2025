@@ -1,0 +1,14 @@
+{
+  "name": "aoc2025",
+  "homepage": "https://github.com/barnabycollins/AoC2025#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/barnabycollins/AoC2025.git"
+  },
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "prettier": "^3.7.3"
+  }
+}
