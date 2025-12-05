@@ -113,6 +113,30 @@ function checkId(remainingDigits: string, remainingTree: DigitTree) {
   return checkId(remainingDigits.substring(1), remainingTree[currentDigit]);
 }
 
+function enumerateIds(tree: DigitTree, digitsLeft: number) {
+  if (tree === true) {
+    return 10 ** digitsLeft;
+  }
+
+  let totalValid = 0;
+
+  for (const childKey of Object.keys(tree)) {
+    totalValid += enumerateIds(tree[childKey], digitsLeft - 1);
+  }
+
+  return totalValid;
+}
+
+function countValidIds(tree: IDCheckTree) {
+  let totalValid = 0;
+
+  for (const numberLength of Object.keys(tree).map((v) => parseInt(v))) {
+    totalValid += enumerateIds(tree[numberLength.toString()], numberLength);
+  }
+
+  return totalValid;
+}
+
 // ======
 
 const idCheckTree = buildCheckTree(ranges);
@@ -130,5 +154,11 @@ for (const id of ids) {
 }
 
 console.log(
-  `Valid IDs: ${validIds}. Took ${performance.now() - start} ms in total.`,
+  `Valid IDs in the list: ${validIds}. Took ${performance.now() - start} ms to this point.`,
+);
+
+const validIdCount = countValidIds(idCheckTree);
+
+console.log(
+  `Valid ids overall: ${validIdCount}. Took ${performance.now() - start} ms in total.`,
 );
