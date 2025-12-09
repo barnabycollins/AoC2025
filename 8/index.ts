@@ -14,6 +14,8 @@ const coords = String(await readFile("./input.txt"))
   .filter((row) => row !== "")
   .map((v) => v.split(",").map((s) => parseInt(s)));
 
+const coordCount = coords.length;
+
 const bucketedCoords = coords.reduce<{ [sum: string]: string[] }>(
   (acc, [x, y, z]) => {
     const key = floorToNearestPower(x + y + z).toString();
@@ -21,12 +23,6 @@ const bucketedCoords = coords.reduce<{ [sum: string]: string[] }>(
   },
   {},
 );
-
-const [maxX, maxY, maxZ] = coords.reduce((acc, [x, y, z]) => [
-  Math.max(acc[0], x),
-  Math.max(acc[1], y),
-  Math.max(acc[2], z),
-]);
 
 function measureDistance(a: number[], b: number[]) {
   return Math.sqrt(
@@ -36,11 +32,11 @@ function measureDistance(a: number[], b: number[]) {
   );
 }
 
-const searchDistanceUpperBound = 10000;
+const searchDistanceUpperBound = 50000;
 
 const distances: {
   [roundedDistance: string]: {
-    coords: [string, string];
+    coords: string[];
     trueDistance: number;
   }[];
 } = {};
@@ -78,44 +74,54 @@ for (const coord of coords) {
       distances[distKey] = [
         ...(distances[distKey] ?? []),
         { coords: [`${x},${y},${z}`, neighbour], trueDistance: dist },
-      ];
+      ].sort((a, b) => a.trueDistance - b.trueDistance);
     }
   }
 }
 
-console.log(`Done bucketing coord pairs.`);
+console.log(
+  `Done bucketing coord pairs after ${performance.now() - start} ms.`,
+);
 
 const MAX_CONNECTIONS = 1000;
 
-function connectCircuits() {
+function connectPairFactory(circuits: Set<string>[]) {
+  return function (a: string, b: string) {
+    let circuitA = circuits.findIndex((circuit) => circuit.has(a));
+    let circuitB = circuits.findIndex((circuit) => circuit.has(b));
+
+    if (circuitA < 0) {
+      circuits.push(new Set([a]));
+      circuitA = circuits.length - 1;
+    }
+    if (circuitB < 0) {
+      circuits.push(new Set([b]));
+      circuitB = circuits.length - 1;
+    }
+
+    if (circuitA !== circuitB) {
+      circuits[circuitA] = new Set([
+        ...circuits[circuitA],
+        ...circuits[circuitB],
+      ]);
+      circuits.splice(circuitB, 1);
+    }
+  };
+}
+
+function connectCircuitsPartA() {
   const circuits: Set<string>[] = [];
+
+  const connectPair = connectPairFactory(circuits);
 
   let connectionCount = 0;
 
   for (const pairs of Object.values(distances)) {
-    for (const pair of pairs.sort((a, b) => a.trueDistance - b.trueDistance)) {
+    for (const pair of pairs) {
       const a = pair.coords[0];
       const b = pair.coords[1];
 
-      let circuitA = circuits.findIndex((circuit) => circuit.has(a));
-      let circuitB = circuits.findIndex((circuit) => circuit.has(b));
-
-      if (circuitA < 0) {
-        circuits.push(new Set([a]));
-        circuitA = circuits.length - 1;
-      }
-      if (circuitB < 0) {
-        circuits.push(new Set([b]));
-        circuitB = circuits.length - 1;
-      }
-
-      if (circuitA !== circuitB) {
-        circuits[circuitA] = new Set([
-          ...circuits[circuitA],
-          ...circuits[circuitB],
-        ]);
-        circuits.splice(circuitB, 1);
-      }
+      connectPair(a, b);
 
       connectionCount++;
       if (connectionCount >= MAX_CONNECTIONS) return circuits;
@@ -125,13 +131,43 @@ function connectCircuits() {
   return circuits;
 }
 
-const circuits = connectCircuits();
+const partACircuits = connectCircuitsPartA();
 
-const multipliedCircuitSizes = circuits
+const partAResult = partACircuits
   .sort((a, b) => b.size - a.size)
   .slice(0, 3)
   .reduce((acc, cur) => acc * cur.size, 1);
 
+console.log(`Part 1: ${partAResult}. Took ${performance.now() - start} ms.`);
+
+function connectCircuitsPartB() {
+  const circuits: Set<string>[] = [];
+
+  const connectPair = connectPairFactory(circuits);
+
+  let connectionCount = 0;
+
+  for (const pairs of Object.values(distances)) {
+    for (const pair of pairs) {
+      const a = pair.coords[0];
+      const b = pair.coords[1];
+
+      connectPair(a, b);
+
+      connectionCount++;
+      if (circuits[0].size === coordCount) return { circuits, lastPair: pair };
+    }
+  }
+
+  throw new Error(`Ran out of connections to make!`);
+}
+
+const { lastPair } = connectCircuitsPartB();
+
+const partBResult = lastPair.coords
+  .map((v) => parseInt(v.split(",")[0]))
+  .reduce((acc, cur) => acc * cur, 1);
+
 console.log(
-  `Part 1: ${multipliedCircuitSizes}. Took ${performance.now() - start} ms.`,
+  `Part 2: ${partBResult}. Took ${performance.now() - start} ms overall.`,
 );
