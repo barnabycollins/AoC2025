@@ -18,7 +18,8 @@ const machines = String(await readFile("./input.txt"))
       .replaceAll(")", "")
       .split(" ")
       .filter((v) => v !== "")
-      .map((m) => m.split(",").map((v) => parseInt(v)));
+      .map((m) => m.split(",").map((v) => parseInt(v)))
+      .sort((a, b) => a.length - b.length);
     const desiredJoltages = matches[3].split(",").map((v) => parseInt(v));
 
     return { desiredLights, buttons, desiredJoltages };
@@ -26,61 +27,87 @@ const machines = String(await readFile("./input.txt"))
 
 type Machine = (typeof machines)[number];
 
-type Action = {
-  state: number[];
-  button: number[];
-  buttonPressCount: number;
-  buttonHistory: number[][];
-};
+function range(start: number, end: number) {
+  const length = end - start;
 
-// breadth first search until the state matches the desired state
-function buttonBFS(
-  { desiredLights, buttons, desiredJoltages }: Machine,
-  mode: 1 | 2,
-) {
-  const desiredState = mode === 1 ? desiredLights : desiredJoltages;
+  return [...Array(length).keys()].map((i) => i + start);
+}
 
-  let startState = new Array(desiredState.length).fill(0);
-  if (startState.every((v, i) => v === desiredState[i])) return 0;
+function rangeInclusive(start: number, end: number) {
+  const length = end - start + 1;
 
-  const actionsToCheck: Action[] = buttons.map((button) => ({
-    state: structuredClone(startState),
-    button,
-    buttonPressCount: 1,
-    buttonHistory: [],
-  }));
+  return [...Array(length).keys()].map((i) => i + start);
+}
 
-  let alreadySeenCombinations = new Set<string>();
+function distributePresses(
+  pressesToDivide: number,
+  buttonsToAllocate: number,
+): number[][] {
+  if (pressesToDivide === 0) return [Array(buttonsToAllocate).fill(0)];
+  if (buttonsToAllocate === 1) return [[pressesToDivide]];
 
-  while (true) {
-    const action = actionsToCheck.shift() as Action;
+  let combinations = [];
 
-    const key = `${[action.state, action.button].map((v) => v.join(",")).join("_")}`;
-    if (alreadySeenCombinations.has(key)) continue;
-    alreadySeenCombinations.add(key);
+  for (const index of rangeInclusive(0, pressesToDivide)) {
+    const lowerCombinations = distributePresses(
+      pressesToDivide - index,
+      buttonsToAllocate - 1,
+    );
 
-    const state = action.state;
-
-    if (mode === 2 && state.some((v, i) => v > desiredState[i])) continue;
-
-    for (const pos of action.button) {
-      state[pos] = mode === 1 ? (state[pos] + 1) % 2 : state[pos] + 1;
+    for (const c of lowerCombinations) {
+      combinations.push([index, ...c]);
     }
+  }
 
-    if (state.every((v, i) => v === desiredState[i])) {
-      return action.buttonPressCount;
-    } else {
-      for (const button of buttons.filter(
-        (b) => b.join("") !== action.button.join(""),
-      )) {
-        actionsToCheck.push({
-          state: structuredClone(state),
-          button,
-          buttonPressCount: action.buttonPressCount + 1,
-          buttonHistory: [...action.buttonHistory, action.button],
-        });
+  return combinations;
+}
+
+function executeCombination(
+  combo: number[],
+  buttons: number[][],
+  desiredState: number[],
+  part: 1 | 2,
+) {
+  const state = Array(desiredState.length).fill(0);
+
+  for (const buttonIndex of range(0, buttons.length)) {
+    const pressCount = combo[buttonIndex];
+
+    for (const statePosition of buttons[buttonIndex]) {
+      state[statePosition] += pressCount;
+
+      if (part === 1) {
+        state[statePosition] %= 2;
+      } else {
+        if (state.some((v, i) => v > desiredState[i])) return false;
       }
     }
+  }
+
+  return state.every((v, i) => v === desiredState[i]);
+}
+
+function buttonCombinationSearch(
+  { desiredLights, buttons, desiredJoltages }: Machine,
+  part: 1 | 2,
+) {
+  const buttonCount = buttons.length;
+  const desiredState = part === 1 ? desiredLights : desiredJoltages;
+
+  let pressCount = 0;
+
+  while (true) {
+    const buttonCombinations = distributePresses(pressCount, buttonCount);
+
+    for (const combo of buttonCombinations) {
+      const matches = executeCombination(combo, buttons, desiredState, part);
+
+      if (matches) {
+        return pressCount;
+      }
+    }
+
+    pressCount++;
   }
 }
 
@@ -89,9 +116,22 @@ let iters = 0;
 for (const machine of machines) {
   iters += 1;
   console.log(`checking machine ${iters}/${machines.length}...`);
-  const presses = buttonBFS(machine, 1);
+  const presses = buttonCombinationSearch(machine, 1);
   console.log(`machine ${iters}: ${presses}`);
   totalButtons += presses;
 }
 
 console.log(`Part 1: ${totalButtons}. Took ${performance.now() - start} ms.`);
+
+totalButtons = 0;
+iters = 0;
+
+for (const machine of machines) {
+  iters += 1;
+  console.log(`checking machine ${iters}/${machines.length}...`);
+  const presses = buttonCombinationSearch(machine, 2);
+  console.log(`machine ${iters}: ${presses}`);
+  totalButtons += presses;
+}
+
+console.log(`Part 2: ${totalButtons}. Took ${performance.now() - start} ms.`);
